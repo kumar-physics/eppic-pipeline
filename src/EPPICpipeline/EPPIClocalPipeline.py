@@ -21,7 +21,7 @@ class EppicLocal:
             self.errorMsg="Can't create output folder"
     urlUniprotswiss="ftp://ftp.expasy.org/databases/uniprot/current_release/uniref/uniref100/uniref100.xml.gz"
     urlUniprotmain="ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/uniref/uniref100/uniref100.xml.gz"
-    urlTaxonomy="http://www.uniprot.org/taxonomy/?query=*&compress=yes&format=tab"
+    urlTaxonomy="http://www.uniprot.org/taxonomy/?query=*\&compress=yes\&format=tab"
     urlBlastdbmain="ftp://ftp.uniprot.org/pub" # US main ftp
     urlBlastdbuk="ftp://ftp.ebi.ac.uk/pub" # UK mirror
     urlShiftmapping="ftp://ftp.ebi.ac.uk/pub/databases/msd/sifts/text/pdb_chain_uniprot.lst"
@@ -42,7 +42,7 @@ class EppicLocal:
                 print self.errorMsg
                 exit
             print "Downloading Taxonomy"
-            if system("curl -s %s | gunzip > %s/taxonomy-all.tab"%(self.urlTaxonomy,self.downloadFolder)):
+            if system("curl -s %s | gunzip > %s/taxonomy-all.tag"%(self.urlTaxonomy,self.downloadFolder)):
                 self.errorFlg=True
                 self.errorMsg="Can't download taxonomy-all.tab"
                 print self.errorMsg
