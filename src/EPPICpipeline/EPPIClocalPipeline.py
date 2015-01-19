@@ -5,15 +5,12 @@ Eppic computation pipeline script
 '''
 
 
-from subprocess import call
-from os import system
 from commands import getstatusoutput
 from subprocess import Popen,PIPE,call
-from string import atoi,atof
+from string import atof
 import mysql.connector
 import MySQLdb
-from mysql.connector import errorcode
-import cmd
+
 
 class EppicLocal:
     
@@ -29,10 +26,11 @@ class EppicLocal:
         self.errorMsg="No Error "
         self.eppicjar="%s/eppic.jar"%(self.outpath)
         self.downloadFolder="%s/download"%(self.outdir)
-        self.cnx=mysql.connector.connect(user=self.mysqluser,host=self.mysqlhost,password=self.mysqlpasswd)
-        self.cursor = self.cnx.cursor()
+        #self.cnx=mysql.connector.connect(user=self.mysqluser,host=self.mysqlhost,password=self.mysqlpasswd)
+        #self.cursor = self.cnx.cursor()
         self.fastaFolder="%s/unique_fasta"%(self.outdir)
         self.uniprotDir="%s/%s"%(self.outdir,self.uniprotDatabase)
+        self.connectDatabase()
     
     urlUniprotReldataswiss="ftp://ftp.expasy.org/databases/uniprot/current_release/knowledgebase/complete/reldate.txt"
     urlUniprotReldatamain="ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/reldate.txt"
@@ -76,6 +74,29 @@ class EppicLocal:
                           ")")
     def checkUniprotUrls(self):
         print "checking"
+        
+    def connectDatabase(self):
+        self.cnx=MySQLdb.connect(user=self.mysqluser,host=self.mysqlhost,passwd=self.mysqlpasswd,local_infile=True)
+        self.cursor = self.cnx.cursor()
+        chkflg=self.cursor.execute("SHOW DATABASES like '%s'"%(self.uniprotDatabase))
+        if chkflg:
+            cc="N"
+            cc=raw_input("Database %s already exists; You want to delete?[Y/N]"%(self.uniprotDatabase))
+            if cc=="y" or cc=="yes" or cc=="Y":
+                #print "Deleted"
+                self.cursor.execute("DROP DATABASE %s"%(self.uniprotDatabase))
+                createdb=self.cursor.execute("CREATE DATABASE %s"%(self.uniprotDatabase))
+                self.cnx=MySQLdb.connect(user=self.mysqluser,host=self.mysqlhost,passwd=self.mysqlpasswd,db=self.uniprotDatabase,local_infile=True)
+                self.cursor = self.cnx.cursor()
+            else:
+                #print "Not deleted"
+                self.cnx=MySQLdb.connect(user=self.mysqluser,host=self.mysqlhost,passwd=self.mysqlpasswd,db=self.uniprotDatabase,local_infile=True)
+                self.cursor = self.cnx.cursor()
+        else:
+            createdb=self.cursor.execute("CREATE DATABASE %s"%(self.uniprotDatabase))
+            self.cnx=MySQLdb.connect(user=self.mysqluser,host=self.mysqlhost,passwd=self.mysqlpasswd,db=self.uniprotDatabase,local_infile=True)
+            self.cursor = self.cnx.cursor()
+        
     
     def checkMeomory(self):
         if not(self.errorFlg):
@@ -184,38 +205,23 @@ class EppicLocal:
     
     def createUniprotTables(self):
         if not(self.errorFlg):
-            try:
-                self.cnx.database=self.uniprotDatabase
-            except mysql.connector.Error as err:
-                if err.errno == errorcode.ER_BAD_DB_ERROR:
-                    self.createUniprotDatabase()
-                    self.cnx.database = self.uniprotDatabase
-                else:
-                    self.errorFlg=True
-                    self.errorMsg=err
             for name, ddl in self.TABLES.iteritems():
                 try:
-                    print("Creating table {} ".format(name))
+                    #print("Creating table {} ".format(name))
                     self.cursor.execute(ddl)
-                except mysql.connector.Error as err:
-                    if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-                        self.errorFlg=True
-                        self.errorMsg="ERROR: Uniprot tables alrady exists"
-                    else:
-                        self.errorFlg=True
-                        self.errorMsg=err.msg
-                else:
-                    print("OK")        
+                except :
+                    self.errorFlg=True
+                    self.errorMsg="ERROR: Can't create uniprot tables;%s database is not empty"%(self.uniprotDatabase)   
+        else:
+            print self.errorMsg
     
-    def createMysqlConnection(self):
-        self.cnx2=MySQLdb.connect(user=self.mysqluser,host=self.mysqlhost,passwd=self.mysqlpasswd,db=self.uniprotDatabase,local_infile=True)
-        self.cursor2=self.cnx2.cursor()
+    
     
     def uploadUniprotTable(self):
         if not(self.errorFlg):
             sqlcmd='''LOAD DATA LOCAL INFILE '%s/uniref100.tab' INTO TABLE uniprot'''%(self.downloadFolder)
             try:
-                self.cursor2.execute(sqlcmd)
+                self.cursor.execute(sqlcmd)
             except MySQLdb.Error, e:
                 self.errorFlg=True
                 self.errorMsg="ERROR: Can't upload uniprot data"  
@@ -230,7 +236,7 @@ class EppicLocal:
         if not(self.errorFlg):
             sqlcmd='''LOAD DATA LOCAL INFILE '%s/uniref100.clustermembers.tab' INTO TABLE uniprot_clusters'''%(self.downloadFolder)
             try:
-                self.cursor2.execute(sqlcmd)
+                self.cursor.execute(sqlcmd)
             except MySQLdb.Error, e:
                 self.errorFlg=True
                 self.errorMsg="ERROR: Can't upload uniprot_cluster data"  
@@ -245,7 +251,7 @@ class EppicLocal:
         if not(self.errorFlg):
             sqlcmd='''LOAD DATA LOCAL INFILE '%s/taxonomy-all.tab' INTO TABLE uniprot IGNORE 1 LINES'''%(self.downloadFolder)
             try:
-                self.cursor2.execute(sqlcmd)
+                self.cursor.execute(sqlcmd)
             except MySQLdb.Error, e:
                 self.errorFlg=True
                 self.errorMsg="ERROR: Can't upload taxonomy data"  
@@ -264,7 +270,7 @@ class EppicLocal:
             print "Indexing uniprot table"
             sqlcmd="CREATE INDEX UNIPROTID_IDX ON uniprot (uniprot_id)"
             try:
-                self.cursor2.execute(sqlcmd)
+                self.cursor.execute(sqlcmd)
             except MySQLdb.Error, e:
                 self.errorFlg=True
                 self.errorMsg="ERROR: Can't index uniprot table"  
@@ -336,7 +342,6 @@ class EppicLocal:
         self.parseUniprotXml()
         self.createUniprotDatabase()
         self.createUniprotTables()
-        self.createMysqlConnection()
         self.uploadUniprotTable()
         self.uploadUniprotClustersTable()
         self.uploadTaxonomyTable()
@@ -349,25 +354,7 @@ class EppicLocal:
    
         
 if __name__=="__main__":
-    p=EppicLocal('2015_01','/media/baskaran_k/data/test')
+    p=EppicLocal('2015_xx','/media/baskaran_k/data/test')
     p.runAll()
-    #p.checkMeomory()
-    #p.downloadUniprot()
-    #p.downloadTaxonomy()
-    #p.unzipTaxonomy()
-    #p.downloadShifts()
-    #p.parseUniprotXml()
-#     p.createUniprotDatabase()
-#     p.createUniprotTables()
-#     p.createMysqlConnection()
-#     p.uploadUniprotTable()
-#     p.uploadUniprotClustersTable()
-#     p.uploadTaxonomyTable()
-    #p.createMysqlConnection()
-    #p.createUniprotIndex()
-    #p.downloadUniprotFasta()
-    #p.downloadUniprotReldata()
-    #p.createUniprotFiles()
-    #p.createUniqueFasta()
     print p.errorFlg,p.errorMsg
     
