@@ -1,6 +1,6 @@
 '''
 Created on Dec 19, 2014
-
+Eppic computation pipeline script
 @author: baskaran_k
 '''
 
@@ -18,13 +18,13 @@ import cmd
 class EppicLocal:
     
     def __init__(self,uniprot,outpath):
-        self.mysqluser='eppicweb'
-        self.mysqlhost='eppic01.psi.ch'
+        self.mysqluser='root'
+        self.mysqlhost='mpc1153.psi.ch'
         self.mysqlpasswd=''
         self.uniprot=uniprot
         self.outpath=outpath
         self.uniprotDatabase="uniprot_%s"%(self.uniprot)
-        self.outdir="%s/uniprot_%s"%(self.outpath,self.uniprot)
+        self.outdir="%s/eppic_%s"%(self.outpath,self.uniprot)
         self.errorFlg=False
         self.errorMsg="No Error "
         self.eppicjar="%s/eppic.jar"%(self.outpath)
@@ -350,6 +350,7 @@ class EppicLocal:
         
 if __name__=="__main__":
     p=EppicLocal('2015_01','/media/baskaran_k/data/test')
+    p.runAll()
     #p.checkMeomory()
     #p.downloadUniprot()
     #p.downloadTaxonomy()
@@ -367,6 +368,6 @@ if __name__=="__main__":
     #p.downloadUniprotFasta()
     #p.downloadUniprotReldata()
     #p.createUniprotFiles()
-    p.createUniqueFasta()
+    #p.createUniqueFasta()
     print p.errorFlg,p.errorMsg
     
