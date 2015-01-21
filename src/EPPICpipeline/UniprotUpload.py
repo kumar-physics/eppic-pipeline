@@ -12,7 +12,7 @@ import MySQLdb
 import sys
 from time import localtime,strftime
 
-class EppicLocal:
+class UniprotUpload:
     
     def __init__(self,uniprot,outpath):
         self.mysqluser='root'
@@ -337,9 +337,23 @@ class EppicLocal:
             mvfasta=call(["mv",self.fastaFolder,"%s/"%(self.clusterFolder)])
             if mvfasta:
                 self.writeLog("ERROR: Can't move %s to %s/"%(self.fastaFolder,self.clusterFolder))
+                sys.exit(1)
             else:
                 self.writeLog("INFO: Prepared files for the cluster")
-                self.writeLog("INFO : Please transfer %s to merlin"%(self.clusterFolder))            
+                self.writeLog("INFO : Please transfer %s to merlin"%(self.clusterFolder))
+                self.writeLog("HINT: Command for file transfer")
+                self.writeLog("HINT: rsync -avz %s <username>@merlinl01.psi.ch:"%(self.clusterFolder))
+                self.writeLog("INFO: End of local calculation")
+    
+    def transferFiles(self):
+        userName=""
+        self.writeLog("INFO: Transfering files to Merlin cluster")
+        tfile=call(["rsync","az",self.clusterFolder,"%s@merlinl01.psi.ch:"%(userName)])
+        if tfile:
+            self.writeLog("ERROR: Can't transfer files")
+            sys.exit(1)
+        else:
+            self.writeLog("INFO: File transfer finished")            
     
     def runAll(self):
         self.downloadUniprot()
@@ -357,11 +371,12 @@ class EppicLocal:
         self.createUniprotFiles()
         self.createUniqueFasta()
         self.prepareFileTransfer()
+        #self.transferFiles()
         
    
         
 if __name__=="__main__":
-    p=EppicLocal('2015_01_test','/media/baskaran_k/data/test')
+    p=UniprotUpload('2015_01_test','/media/baskaran_k/data/test')
     p.runAll()
     #p.runAll()
 
