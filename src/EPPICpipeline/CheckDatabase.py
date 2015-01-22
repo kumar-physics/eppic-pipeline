@@ -22,6 +22,7 @@ class CheckDatabase:
         self.getPDBlist()
         self.getDatabaselist()
         self.findMissing()
+        self.printOutput()
         self.writeFiles()
     
     def getPDBlist(self):
@@ -45,12 +46,20 @@ class CheckDatabase:
         self.missing=list(set(self.pdblist)-set(self.eppiclist))
         self.obsolete=list(set(self.eppiclist)-set(self.pdblist))
     
+    def printOutput(self):
+        print "\tTotal No. of entries in the PDB repo \t\t%d"%(len(self.pdblist))
+        print "\tTotal No. of entries in the EPPIC db \t\t%d"%(len(self.eppiclist))
+        print "\tNo. of entries with error in EPPIC db \t\t%s"%(len(self.eppicErrorlist))
+        print "\tNo. of entries missing in EPPIC db \t\t%s"%(len(self.missing))
+        print "\tNo. of obsoleted entries exists in EPPIC db \t%s"%(len(self.obsolete))
+    
     def writeFiles(self):
         open("%s/pdbrepo.list"%(self.outFolder),'w').write("%s\n"%("\n".join(self.pdblist)))
         open("%s/eppicdb.list"%(self.outFolder),'w').write("%s\n"%("\n".join(self.eppiclist)))
         open("%s/eppicerror.list"%(self.outFolder),'w').write("%s\n"%("\n".join(self.eppicErrorlist)))
         open("%s/eppicmissing.list"%(self.outFolder),'w').write("%s\n"%("\n".join(self.missing)))
         open("%s/obsolete.list"%(self.outFolder),'w').write("%s\n"%("\n".join(self.obsolete)))
+        
         
         
         
