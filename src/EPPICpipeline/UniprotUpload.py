@@ -376,7 +376,9 @@ class UniprotUpload:
    
         
 if __name__=="__main__":
-    p=UniprotUpload('2015_01_test','/media/baskaran_k/data/test')
+    uniprotversion=sys.argv[1]
+    workdir=sys.argv[2]
+    p=UniprotUpload(uniprotversion,workdir)
     p.runAll()
     #p.runAll()
 

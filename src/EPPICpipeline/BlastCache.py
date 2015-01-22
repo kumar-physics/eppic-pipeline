@@ -123,7 +123,13 @@ class BlastCache:
                 self.BlastQsub(qs[i], i+1, n)
             self.writeLog("INFO: qsub scripts for BLAST are ready to submit")
             self.writeLog("INFO: you may submit the qsubjobs now")
-                
+    def runAll(self):
+        self.checkSpace()
+        self.makeLogFolders()
+        self.copyUniprotToNodes()
+        self.checkUniprotinNodes()
+        self.writeBlastQsub()
+                    
         
                 
     def BlastQsub(self,qlist,i,n):
@@ -160,6 +166,6 @@ class BlastCache:
                 
         
 if __name__=="__main__":
-    p=BlastCache('/gpfs/home/baskaran_k/test')
-    p.makeLogFolders()
-    p.writeBlastQsub()
+    workdir=sys.argv[1]
+    p=BlastCache(workdir)
+    p.runAll()
