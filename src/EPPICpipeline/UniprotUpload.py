@@ -26,7 +26,7 @@ class UniprotUpload:
         self.downloadFolder="%s/download"%(self.outdir)
         self.fastaFolder="%s/unique_fasta"%(self.outdir)
         self.uniprotDir="%s/%s"%(self.outdir,self.uniprotDatabase)
-        self.logfile=open("%s/EPPIClocal.log"%(self.outpath),'a')
+        self.logfile=open("%s/uniprot_upload_%s.log"%(self.outpath,strftime("%d%m%Y_%H%M%S",localtime())),'a')
         self.writeLog("INFO: EPPIC calculation started")
         self.checkMeomory()
         self.connectDatabase()
