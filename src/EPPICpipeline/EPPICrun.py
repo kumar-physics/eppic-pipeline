@@ -4,11 +4,9 @@ Created on Jan 26, 2015
 @author: baskaran_k
 '''
 
-from commands import getoutput,getstatusoutput
+from commands import getstatusoutput
 from time import localtime,strftime
 import sys
-from string import atof
-from Bio.PDB.MMCIF2Dict import MMCIF2Dict
 from math import ceil
 
 class EPPICrun:
@@ -25,7 +23,6 @@ class EPPICrun:
         self.output="%s/output"%(self.workDir)
         self.qsub="%s/qsubscripts"%(self.workDir)
         
-        print "init"
         
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y_%H:%M:%S",localtime())
@@ -132,7 +129,6 @@ class EPPICrun:
         self.writeLog("INFO: input lists and qsub scripts  created")
         
     def eppicQsub(self,qsubname,jobname,logdir,maxtask,maxram,inplist,outfolder):
-        self.writeLog("INFO: Writing qsub script")
         f=open(qsubname,'w')
         f.write("#!/bin/sh\n\n")
         f.write("#$ -N %s\n"%(jobname))
@@ -154,14 +150,50 @@ class EPPICrun:
         f.write("cp %s/logs/JOBNAME.e${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.e\n"%(outfolder,outfolder))
         f.write("cp %s/logs/JOBNAME.o${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.o\n"%(outfolder,outfolder))
         f.close()
+        self.writeLog("INFO: %s written"%(qsubname))
 
     def initialRun(self):
-        self.rsyncPDB()
+        #self.rsyncPDB()
         self.prepareInput()
             
-            
+    def testChunk(self,chkno,n):
+        self.writeLog("INFO: testing chunk%d for unfinished jobs"%(chkno))
+        jname="eppic-chk%d"%(chkno)
+        chk="chunk%d"%(chkno)
+        reflist="%s/pdb%s_run%d.list"%(self.input,chk,n-1)
+        outfolder="%s/%s/data/all"%(self.output,chk)
+        pdblist=open(reflist,'r').read().split("\n")[:-1]
+        unfinished=[]
+        nn=len(pdblist)/10
+        for pdb in pdblist:
+            pp=pdblist.index(pdb)
+            if pp%nn==0:
+                self.update_progress((pp/nn)*10)
+            tail=getstatusoutput("tail -n1 -q %s/%s/%s.log"%(outfolder,pdb,pdb))
+            if tail[0]:
+                self.writeLog("ERROR: Can't find %s/%s/%s.log"%(outfolder,pdb,pdb))
+                sys.exit(1) 
+            if not("Finished successfully" in tail[1]) and not("FATAL" in tail[1]) and not ("Clashes" in tail[1]):
+                unfinished.append(pdb)
+        if len(unfinished)!=0:
+            iplist="%s/pdb%s_run%d.list"%(self.input,chk,n)
+            qsname="%s/eppic_%s_run%d.sh"%(self.qsub,chk,n)
+            self.writeLog("INFO: %s unfinished jobs found in chunk%d"%(len(unfinished),chkno))
+            self.writeLog("INFO: writing %s"%(iplist))
+            newlist=open(iplist,'w').write("%s\n"%("\n".join(unfinished)))
+            odir="%s/%s"%(self.output,chk)
+            ldir="%s/logs"%(odir)
+            mxt=len(unfinished)
+            maxr=16
+            self.writeLog("INFO: writing %s"%(qsname))
+            self.eppicQsub(qsname, jname, ldir, mxt, maxr, iplist, odir)
+        else:
+            self.writeLog("INFO: All jobs finished in chunk%d"%(chkno))
+    
+    def update_progress(self,progress):
+        print '\r[{0}] {1}%'.format('#'*(progress/5), progress)
         
         
 if __name__=="__main__":
-    p=EPPICrun('/home/baskaran_k/test2')
-    p.prepareInput()
+    p=EPPICrun('/media/baskaran_k/data/test2')
+    p.testChunk(5, 2)
