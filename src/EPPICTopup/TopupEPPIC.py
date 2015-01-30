@@ -6,15 +6,217 @@ Created on Jan 28, 2015
 
 from time import localtime,strftime
 import sys
-
+from commands import getstatusoutput
+from re import findall
+import MySQLdb
+from string import atof
 class TopupEPPIC:
     
     def __init__(self):
-        print "test"
+        self.mysqluser=''
+        self.mysqlhost='localhost'
+        self.mysqlpasswd=''
+        self.eppicpath='/home/eppicweb/software/bin/eppic'
+        self.eppicconf='/home/eppicweb/.eppic.conf'
+        self.version="2015_01"
+        self.uniprot="uniprot_%s"%(self.version)
+        self.eppicdb="eppic_%s"%(self.version)
+        self.mysqldb=self.eppicdb
+        self.pdbrepo="/data/dbs/pdb"
+        self.topupDir="/home/eppicweb/topup"
+        self.today=strftime("%d-%m-%Y",localtime())
+        self.workDir="%s/%s"%(self.topupDir,self.today)
+        mkd=getstatusoutput("mkdir %s"%(self.workDir))
+        if mkd[0]:
+            print "ERROR: Can't create %s"%(self.workDir)
+            sys.exit(1)
+        self.logfile=open("%s/topup_%s.log"%(self.workDir,strftime("%d%m%Y_%H%M%S",localtime())),'a')
+        self.createTopupfolder()
+        getfile=getstatusoutput('ls -tr %s'%(self.pdbrepo))
+        if getfile[0]:
+            self.writeLog("ERROR: Can't get the latest PDB rsync log file in %s"%(self.pdbrepo))
+            sys.exit(1)
+        self.rsyncfile="%s/%s"%(self.pdbrepo,getfile[1].split("\n")[-1])
+        
+        
+    def createTopupfolder(self):
+        self.inputDir="%s/input"%(self.workDir)
+        mkd=getstatusoutput("mkdir %s"%(self.inputDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s"%(self.inputDir))
+            sys.exit(1)
+        self.outputDir="%s/output"%(self.workDir)
+        mkd=getstatusoutput("mkdir %s"%(self.outputDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s"%(self.outputDir))
+            sys.exit(1)
+        self.logDir="%s/logs"%(self.outputDir)
+        mkd=getstatusoutput("mkdir %s"%(self.logDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s"%(self.logDir))
+            sys.exit(1)
+        mkd=getstatusoutput("mkdir %s/data"%(self.outputDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s/data"%(self.outputDir))
+            sys.exit(1)
+        mkd=getstatusoutput("mkdir %s/data/all"%(self.outputDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s/data/all"%(self.outputDir))
+            sys.exit(1)
+        mkd=getstatusoutput("mkdir %s/data/divided"%(self.outputDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s/data/divided"%(self.outputDir))
+            sys.exit(1)
+        self.qsubDir="%s/qsubscripts"%(self.workDir)
+        mkd=getstatusoutput("mkdir %s"%(self.qsubDir))
+        if mkd[0]:
+            self.writeLog("ERROR: Can't create %s"%(self.qsubDir))
+            sys.exit(1)
+        
+    def parsePDBrsyncfile(self):
+        self.writeLog("INFO: Parsing PDB rsync file")
+        f=open(self.rsyncfile,'r').read()
+        self.deletedPDB=findall(r'deleting\s*mmCIF/\S+/(\S+).cif.gz\s+',f)
+        self.newPDB=findall(r'mmCIF/\S+.cif.gz -> ../../divided/mmCIF/\S+/(\S+).cif.gz\s+', f)
+        self.allPDB=list(set(findall(r'mmCIF/\S+/(\S+).cif.gz\s+', f)))
+        self.updatedPDB=[i for i in self.allPDB if i not in self.newPDB and i not in self.deletedPDB]
+        self.writeLog("INFO: %d new,%d updated,%d deleted entries found"%(len(self.newPDB),len(self.updatedPDB),len(self.deletedPDB)))
+        
+        
+    def prepareInputs(self):
+        self.writeLog("INFO: preparing input lists")
+        self.pdbinput="%s/pdbinput_%s.list"%(self.inputDir,self.today)
+        fo=open(self.pdbinput,'w')
+        fo.write("%s\n"%("\n".join(self.newPDB+self.updatedPDB)))
+        fo.close()
+        fo=open("%s/newPDB_%s.list"%(self.inputDir,self.today),'w')
+        fo.write("%s\n"%("\n".join(self.newPDB)))
+        fo.close()
+        fo=open("%s/updatedPDB_%s.list"%(self.inputDir,self.today),'w')
+        fo.write("%s\n"%("\n".join(self.updatedPDB)))
+        fo.close()
+        fo=open("%s/deletedPDB_%s.list"%(self.inputDir,self.today),'w')
+        fo.write("%s\n"%("\n".join(self.deletedPDB)))
+        fo.close()
+        self.writeLog("INFO: input lists prepared")
+        
+    def writeQsubscript(self):
+        self.qsubscript="%s/topup_%s.sh"%(self.qsubDir,self.today)
+        fo=open(self.qsubscript,'w')
+        fo.write("#!/bin/sh\n\n")
+        fo.write("#$ -N topup\n#$ -q topup.q\n#$ -e %s/logs\n#$ -o %s/logs\n#$ -t 1-%d\n#$ -l s_rt=12:00:00,h_rt=12:00:30\n"%(self.outputDir,self.outputDir,len(self.newPDB)+len(self.updatedPDB)))
+        fo.write("pdb=`grep -v \"^#\"  %s | sed \"s/\(....\).*/\\1/\" | sed \"${SGE_TASK_ID}q;d\"`\n"%(self.pdbinput))
+        fo.write("# Cut the middle letters of pdb code for making directory in divided\n")
+        fo.write("mid_pdb=`echo $pdb | awk -F \"\" '{print $2$3}'`\n")
+        fo.write("# Check is directory is not present\n")
+        fo.write("if [ ! -d %s/data/divided/$mid_pdb ]; then mkdir -p %s/data/divided/$mid_pdb; fi\n"%(self.outputDir,self.outputDir))
+        fo.write("if [ ! -d %s/data/divided/$mid_pdb/$pdb ]; then mkdir -p %s/data/divided/$mid_pdb/$pdb; fi\n"%(self.outputDir,self.outputDir))
+        fo.write("if [ ! -d %s/data/all ]; then mkdir  %s/data/all; fi\n"%(self.outputDir,self.outputDir))
+        fo.write("cd %s/data/all/\n"%(self.outputDir))
+        fo.write("ln -s ../divided/$mid_pdb/$pdb $pdb\n")
+        fo.write("%s -i $pdb -a 1 -s -o %s/data/divided/$mid_pdb/$pdb -l -w -g %s\n"%(self.eppicpath,self.outputDir,self.eppicconf))
+        fo.write("cp %s/logs/topup.e${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.e\n"%(self.outputDir,self.outputDir))
+        fo.write("cp %s/logs/topup.o${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.o\n"%(self.outputDir,self.outputDir))
+        fo.close()
     
+    def submitJobs(self):
+        self.writeLog("INFO: Submitting jobs")
+        subjob=getstatusoutput("qsub %s"%(self.qsubscript))
+        if subjob[0]:
+            self.writeLog("ERROR: Can't submit jobs")
+            sys.exit(1)
+        else:
+            self.writeLog("INFO: Job submitted %s"%(subjob[1]))
     
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y_%H:%M:%S",localtime())
         self.logfile.write("%s\t%s\n"%(t,msg))
         print "%s\t%s\n"%(t,msg)
         
+    def connectDatabase(self):
+        self.writeLog("INFO: Connecting to MySQL database")
+        try:
+            self.cnx=MySQLdb.connect(user=self.mysqluser,host=self.mysqlhost,passwd=self.mysqlpasswd,db=self.mysqldb)
+            self.cursor=self.cnx.cursor()
+        except:
+            self.writeLog("ERROR:Can't connect to mysql database")
+            sys.exit(1)
+      
+    def runQuery(self,sqlquery):
+        try:
+            self.cursor.execute(sqlquery)
+            queryout=self.cursor.fetchall()
+        except:
+            self.writeLog("ERROR: Can't execute '%s'"%(sqlquery))
+            queryout=-1
+            sys.exit(1)
+        return queryout
+
+    def getPreviousStat(self):
+        self.writeLog("INFO: Collecting previous statists")
+        self.connectDatabase()
+        PdbCount=atof(self.runQuery("select count(*) from Job where length(jobId)=4")[0][0])
+        EppicCount=atof(self.runQuery("select count(*) from Job where length(jobId)=4 and status='Finished'")[0][0])
+        EppicCountp=(EppicCount/PdbCount)*100
+        InterfaceCount=atof(self.runQuery("select count(*) from InterfaceScore as s inner join Interface as i on i.uid=s.interfaceItem_uid inner join \
+        InterfaceCluster as ic on ic.uid=i.interfaceCluster_uid inner join PdbInfo as p on p.uid=ic.pdbInfo_uid inner join Job as j on j.uid=p.job_uid \
+        where length(jobId)=4 and s.method='eppic'")[0][0])
+        BioCount=atof(self.runQuery("select count(*) from InterfaceScore as s inner join Interface as i on i.uid=s.interfaceItem_uid inner join \
+        InterfaceCluster as ic on ic.uid=i.interfaceCluster_uid inner join PdbInfo as p on p.uid=ic.pdbInfo_uid inner join Job as j on j.uid=p.job_uid \
+        where length(jobId)=4 and s.method=\"eppic\" and s.callName=\"bio\"")[0][0])
+        BioCountp=(BioCount/InterfaceCount)*100
+        XtalCount=atof(self.runQuery("select count(*) from InterfaceScore as s inner join Interface as i on i.uid=s.interfaceItem_uid inner join \
+        InterfaceCluster as ic on ic.uid=i.interfaceCluster_uid inner join PdbInfo as p on p.uid=ic.pdbInfo_uid inner join Job as j on j.uid=p.job_uid \
+        where length(jobId)=4 and s.method=\"eppic\" and s.callName=\"xtal\"")[0][0])
+        XtalCountp=(XtalCount/InterfaceCount)*100
+        ChainCount=atof(self.runQuery("select count(*) from ChainCluster c inner join PdbInfo as p on p.uid=c.pdbInfo_uid inner join \
+        Job as j on j.uid=p.job_uid where length(jobId)=4")[0][0])
+        ChainHasUniprot=atof(self.runQuery("select count(*) from ChainCluster c inner join PdbInfo as p on p.uid=c.pdbInfo_uid inner join \
+        Job as j on j.uid=p.job_uid where length(jobId)=4 and c.hasUniProtRef")[0][0])
+        ChainHasUniprotp=(ChainHasUniprot/ChainCount)*100
+        ChainHas10H60P=atof(self.runQuery("select count(*) from ChainCluster c inner join PdbInfo as p on p.uid=c.pdbInfo_uid inner join Job as \
+        j on j.uid=p.job_uid where length(jobId)=4 and c.hasUniProtRef and c.seqIdCutoff>0.59 and c.numHomologs>=10")[0][0])
+        ChainHas10H60Pp=(ChainHas10H60P/ChainHasUniprot)*100
+        ChainHas30H60P=atof(self.runQuery("select count(*) from ChainCluster c inner join PdbInfo as p on p.uid=c.pdbInfo_uid inner join Job as j \
+        on j.uid=p.job_uid where length(jobId)=4 and c.hasUniProtRef and c.seqIdCutoff>0.59 and c.numHomologs>=30")[0][0])
+        ChainHas30H60Pp=(ChainHas30H60P/ChainHasUniprot)*100
+        ChainHas50H60P=atof(self.runQuery("select count(*) from ChainCluster c inner join PdbInfo as p on p.uid=c.pdbInfo_uid inner join Job as j on \
+        j.uid=p.job_uid where length(jobId)=4 and c.hasUniProtRef and c.seqIdCutoff>0.59 and c.numHomologs>=50")[0][0])
+        ChainHas50H60Pp=(ChainHas50H60P/ChainHasUniprot)*100
+        ChainHas10H50P=atof(self.runQuery("select count(*) from ChainCluster c inner join PdbInfo as p on p.uid=c.pdbInfo_uid inner join Job as j on \
+        j.uid=p.job_uid where length(jobId)=4 and c.hasUniProtRef and c.seqIdCutoff>0.49 and c.numHomologs>=10")[0][0])
+        ChainHas10H50Pp=(ChainHas10H50P/ChainHasUniprot)*100
+        ExpStat=self.runQuery("select expMethod,count(*) from PdbInfo as p inner join Job as j on j.uid=p.job_uid where length(jobId)=4 group by p.expMethod order by count(*) desc")
+        fo=open("%s/statistics_prev.txt"%(self.workDir),'w')
+        fo.write("PdbCount\t%d\n"%(PdbCount))
+        fo.write("EppicCount\t%d\n"%(EppicCount))
+        fo.write("InterfaceCount\t%d\n"%(InterfaceCount))
+        fo.write("BioCount\t%d\n"%(BioCount))
+        fo.write("BioCountp\t%f\n"%(BioCountp))
+        fo.write("XtalCount\t%d\n"%(XtalCount))
+        fo.write("XtalCountp\t%f\n"%(XtalCountp))
+        fo.write("ChainCount\t%d\n"%(ChainCount))
+        fo.write("ChainHasUniprot\t%d\n"%(ChainHasUniprot))
+        fo.write("ChainHasUniprotp\t%f\n"%(ChainHasUniprotp))
+        fo.write("ChainHas10H50P\t%d\n"%(ChainHas10H50P))
+        fo.write("ChainHas10H50Pp\t%f\n"%(ChainHas10H50Pp))
+        fo.write("ChainHas10H60P\t%d\n"%(ChainHas10H60P))
+        fo.write("ChainHas10H60Pp\t%f\n"%(ChainHas10H60Pp))
+        fo.write("ChainHas30H60P\t%d\n"%(ChainHas30H60P))
+        fo.write("ChainHas30H60Pp\t%f\n"%(ChainHas30H60Pp))
+        fo.write("ChainHas50H60P\t%d\n"%(ChainHas50H60P))
+        fo.write("ChainHas50H60Pp\t%f\n"%(ChainHas50H60Pp))
+        for ent in ExpStat:
+            fo.write("%s\t%d\n"%(ent[0],int(ent[1])))
+        fo.close()
+        self.writeLog("INFO: previous statistics file written")
+        
+
+    def runAll(self):
+        self.parsePDBrsyncfile()
+        self.prepareInputs()
+        self.writeQsubscript()
+        self.submitJobs()
+if __name__=="__main__":
+    p=TopupEPPIC()
+    p.getPreviousStat()
