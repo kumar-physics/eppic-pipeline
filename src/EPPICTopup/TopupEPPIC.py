@@ -10,6 +10,7 @@ from commands import getstatusoutput
 from re import findall
 import MySQLdb
 from string import atof
+
 class TopupEPPIC:
     
     def __init__(self):
@@ -216,7 +217,8 @@ class TopupEPPIC:
         self.parsePDBrsyncfile()
         self.prepareInputs()
         self.writeQsubscript()
+        self.getPreviousStat()
         self.submitJobs()
 if __name__=="__main__":
     p=TopupEPPIC()
-    p.getPreviousStat()
+    p.runAll()
