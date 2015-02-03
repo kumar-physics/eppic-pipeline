@@ -8,21 +8,50 @@ from commands import getstatusoutput
 from time import localtime,strftime
 import sys
 from math import ceil
+from string import atoi
 
 class EPPICrun:
     
     def __init__(self,wd):
         self.EPPIC="/gpfs/home/baskaran_k/software/bin/eppic"
         self.EPPICCONF="/gpfs/home/baskaran_k/.eppic.conf"
-        #self.mmCIFDir="/gpfs/home/baskaran_k/data/pdb/data/structures/all/mmCIF"
-        self.mmCIFDir="/home/baskaran_k/cifrepo"
+        self.mmCIFDir="/gpfs/home/baskaran_k/data/pdb/data/structures/all/mmCIF"
+        #self.mmCIFDir="/home/baskaran_k/cifrepo"
         self.workDir=wd
         self.chunksize=30000
-        self.logfile=open("%s/blast_cache_%s.log"%(self.workDir,strftime("%d%m%Y_%H%M%S",localtime())),'a')
+        self.logfile=open("%s/eppic_run_%s.log"%(self.workDir,strftime("%d%m%Y",localtime())),'a')
+        self.getUniprotVersion()
+        self.uniprot="uniprot_%"%(self.version)
+        self.getLocalBlastdir()
         self.input="%s/input"%(self.workDir)
         self.output="%s/output"%(self.workDir)
         self.qsub="%s/qsubscripts"%(self.workDir)
+        self.blastcache="%s/blast_cache_%s"%(self.workDir,self.uniprot)
         
+    def getUniprotVersion(self):
+        universion=getstatusoutput("cat %s | grep LOCAL_UNIPROT_DB_NAME"%(self.EPPICCONF))
+        if universion[0]:
+            self.writeLog("ERROR: Can't find uniport version from %s file"%(self.EPPICCONF))
+            sys.exit(1)
+        else:
+            self.version=universion[1].split("uniprot_")[-1]
+            self.writeLog("INFO: UniProt version : %s"%(self.version))
+    
+    def moveBlastFiles(self):
+        self.writeLog("INFO: moving %s to %s"%(self.blastcache,self.blastdir))
+        chk=getstatusoutput("mv %s %s"%(self.blastcache,self.blastdir))
+        if chk[0]:
+            self.writeLog("ERROR: Can't move %s to %s"%(self.blastcache,self.blastdir))
+            sys.exit(1)
+    
+    def getLocalBlastdir(self):
+        universion=getstatusoutput("cat %s | grep BLAST_CACHE_DIR"%(self.EPPICCONF))
+        if universion[0]:
+            self.writeLog("ERROR: Can't find uniport version from %s file"%(self.EPPICCONF))
+            sys.exit(1)
+        else:
+            self.blastdir=universion[1].split("=")[-1]
+            self.writeLog("INFO: BLAST_CACHE_DIR : %s"%(self.blastdir))  
         
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y_%H:%M:%S",localtime())
@@ -147,8 +176,8 @@ class EPPICrun:
         f.write("cd %s/data/all/\n"%(outfolder))
         f.write("ln -s ../divided/$mid_pdb/$pdb $pdb\n")
         f.write("%s -i $pdb -a 1 -s -o %s/data/divided/$mid_pdb/$pdb -l -w -g %s\n"%(self.EPPIC,outfolder,self.EPPICCONF))
-        f.write("cp %s/logs/JOBNAME.e${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.e\n"%(outfolder,outfolder))
-        f.write("cp %s/logs/JOBNAME.o${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.o\n"%(outfolder,outfolder))
+        f.write("cp %s/logs/%s.e${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.e\n"%(outfolder,jobname,outfolder))
+        f.write("cp %s/logs/%s.o${JOB_ID}.${SGE_TASK_ID} %s/data/divided/$mid_pdb/$pdb/$pdb.o\n"%(outfolder,jobname,outfolder))
         f.close()
         self.writeLog("INFO: %s written"%(qsubname))
 
@@ -164,6 +193,7 @@ class EPPICrun:
         outfolder="%s/%s/data/all"%(self.output,chk)
         pdblist=open(reflist,'r').read().split("\n")[:-1]
         unfinished=[]
+        nonstandard=[]
         nn=len(pdblist)/10
         for pdb in pdblist:
             pp=pdblist.index(pdb)
@@ -173,12 +203,18 @@ class EPPICrun:
             if tail[0]:
                 self.writeLog("ERROR: Can't find %s/%s/%s.log"%(outfolder,pdb,pdb))
                 sys.exit(1) 
-            if not("Finished successfully" in tail[1]) and not("FATAL" in tail[1]) and not ("Clashes" in tail[1]):
+            if not("Finished successfully" in tail[1]) and not("FATAL" in tail[1]) and not("Clashes" in tail[1]):
                 unfinished.append(pdb)
+            if "FATAL" in tail[1] or "Clashes" in tail[1]:
+                nonstandard.append(pdb)
+        if len(nonstandard)!=0:
+            self.writeLog("INFO: %d nonstandard/clashes entries found in chunk%d"%(len(nonstandard),chkno))
+            ipblist="%s/pdb%s_run%d.blist"%(self.input,chk,n)
+            newlist=open(ipblist,'w').write("%s\n"%("\n".join(nonstandard)))
         if len(unfinished)!=0:
             iplist="%s/pdb%s_run%d.list"%(self.input,chk,n)
             qsname="%s/eppic_%s_run%d.sh"%(self.qsub,chk,n)
-            self.writeLog("INFO: %s unfinished jobs found in chunk%d"%(len(unfinished),chkno))
+            self.writeLog("INFO: %d unfinished jobs found in chunk%d"%(len(unfinished),chkno))
             self.writeLog("INFO: writing %s"%(iplist))
             newlist=open(iplist,'w').write("%s\n"%("\n".join(unfinished)))
             odir="%s/%s"%(self.output,chk)
@@ -192,8 +228,28 @@ class EPPICrun:
     
     def update_progress(self,progress):
         print '\r[{0}] {1}%'.format('#'*(progress/5), progress)
+    
+    def firstTime(self):
+        self.rsyncPDB()
+        self.prepareInput()
+        self.moveBlastFiles()
+        
+        
+        
         
         
 if __name__=="__main__":
-    p=EPPICrun('/media/baskaran_k/data/test2')
-    p.testChunk(5, 2)
+    if len(sys.argv)==2:
+        workdir=sys.argv[1]
+        p=EPPICrun(workdir)
+        p.firstTime()
+    elif len(sys.argv)==4:
+        workdir=sys.argv[1]
+        r=atoi(sys.argv[2])
+        chk=atoi(sys.argv[3])
+        p=EPPICrun(workdir)
+        p.testChunk(chk, r)
+    else:
+        print "Usage %s <dir> "%(sys.argv[0])
+        print "Usage %s <dir> <check cycle> <chunk no>"%(sys.argv[0])
+        

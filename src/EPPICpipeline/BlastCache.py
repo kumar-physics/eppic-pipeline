@@ -14,7 +14,7 @@ class BlastCache:
         self.userName=getoutput('whoami')
         self.workDir=wd
         self.logFolder="%s/logs"%(self.workDir)
-        self.logfile=open("%s/blast_cache_%s.log"%(self.workDir,strftime("%d%m%Y_%H%M%S",localtime())),'a')
+        self.logfile=open("%s/blast_cache_%s.log"%(self.workDir,strftime("%d%m%Y",localtime())),'a')
         self.uniprot='uniprot_2015_01'
         self.fastaFolder="%s/unique_fasta"%(self.workDir)
         self.blastp='/gpfs/home/baskaran_k/software/packages/ncbi-blast-2.2.27+/bin/blastp'
@@ -40,6 +40,19 @@ class BlastCache:
             sys.exit(1)
         else:
             self.writeLog("INFO: %s created"%(self.blastlog))
+        
+        mkblog=getstatusoutput("mkdir %s"%(self.blastcache))
+        if mkblog[0]==256:
+            self.writeLog("WARNING: %s already exists"%(self.blastcache))
+        elif mkblog[0]!=0:
+            self.writeLog("ERROR: can't create %s"%(self.blastcache))
+            sys.exit(1)
+        else:
+            self.writeLog("INFO: %s created"%(self.blastcache))
+        cpreldat=getstatusoutput("cp %s/%s/reldate.txt %s/"%(self.workDir,self.uniprot,self.blastcache))
+        if cpreldat[0]:
+            self.writeLog("ERROR can't copy %s/%s/reldate.txt to  %s/"%(self.workDir,self.uniprot,self.blastcache))
+            sys.exit(1)
                 
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y_%H:%M:%S",localtime())
