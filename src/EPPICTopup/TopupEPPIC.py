@@ -15,14 +15,10 @@ class TopupEPPIC:
     
     def __init__(self):
         self.mysqluser=''
-        self.mysqlhost='localhost'
+        self.mysqlhost=''
         self.mysqlpasswd=''
         self.eppicpath='/home/eppicweb/software/bin/eppic'
         self.eppicconf='/home/eppicweb/.eppic.conf'
-        self.version="2015_01"
-        self.uniprot="uniprot_%s"%(self.version)
-        self.eppicdb="eppic_%s"%(self.version)
-        self.mysqldb=self.eppicdb
         self.pdbrepo="/data/dbs/pdb"
         self.topupDir="/home/eppicweb/topup"
         self.today=strftime("%d-%m-%Y",localtime())
@@ -31,13 +27,26 @@ class TopupEPPIC:
         if mkd[0]:
             print "ERROR: Can't create %s"%(self.workDir)
             sys.exit(1)
-        self.logfile=open("%s/topup_%s.log"%(self.workDir,strftime("%d%m%Y_%H%M%S",localtime())),'a')
+        self.logfile=open("%s/topup_%s.log"%(self.workDir,strftime("%d%m%Y",localtime())),'a')
+        self.getUniprotVersion()
+        self.uniprot="uniprot_%s"%(self.version)
+        self.eppicdb="eppic_%s"%(self.version)
+        self.mysqldb=self.eppicdb
         self.createTopupfolder()
         getfile=getstatusoutput('ls -tr %s'%(self.pdbrepo))
         if getfile[0]:
             self.writeLog("ERROR: Can't get the latest PDB rsync log file in %s"%(self.pdbrepo))
             sys.exit(1)
         self.rsyncfile="%s/%s"%(self.pdbrepo,getfile[1].split("\n")[-1])
+        
+    def getUniprotVersion(self):
+        universion=getstatusoutput("cat %s | grep LOCAL_UNIPROT_DB_NAME"%(self.eppicconf))
+        if universion[0]:
+            self.writeLog("ERROR: Can't find uniport version from %s file"%(self.eppicconf))
+            sys.exit(1)
+        else:
+            self.version=universion[1].split("uniprot_")[-1]
+            self.writeLog("INFO: UniProt version : %s"%(self.version))
         
         
     def createTopupfolder(self):
@@ -122,17 +131,24 @@ class TopupEPPIC:
     
     def submitJobs(self):
         self.writeLog("INFO: Submitting jobs")
-        subjob=getstatusoutput("qsub %s"%(self.qsubscript))
-        if subjob[0]:
-            self.writeLog("ERROR: Can't submit jobs")
-            sys.exit(1)
+        if (len(self.newPDB)+len(self.updatedPDB))<1000:
+            subjob=getstatusoutput("source /var/lib/gridengine/default/common/settings.sh;qsub %s"%(self.qsubscript))
+            if subjob[0]:
+                self.writeLog("ERROR: Can't submit jobs")
+                sys.exit(1)
+            else:
+                self.writeLog("INFO: Job submitted %s"%(subjob[1]))
+                mm="%d new entries\n%d updated entries\n%d deleted deleted entries\n%d jobs submitted successfully"%(len(self.newPDB),len(self.updatedPDB),len(self.deletedPDB),len(self.newPDB)+len(self.updatedPDB))
+                self.sendMessage(mm)
         else:
-            self.writeLog("INFO: Job submitted %s"%(subjob[1]))
+            self.writeLog("WARNING: more than 1000 jobs found.Jobs not submitted. Manually submit %s"%(self.qsubscript))
+            mm="more than 1000 jobs found.Jobs not submitted. Manually submit %s"%(self.qsubscript)
+            self.sendMessage(mm)
     
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y_%H:%M:%S",localtime())
         self.logfile.write("%s\t%s\n"%(t,msg))
-        print "%s\t%s\n"%(t,msg)
+        #print "%s\t%s\n"%(t,msg)
         
     def connectDatabase(self):
         self.writeLog("INFO: Connecting to MySQL database")
@@ -211,10 +227,27 @@ class TopupEPPIC:
             fo.write("%s\t%d\n"%(ent[0],int(ent[1])))
         fo.close()
         self.writeLog("INFO: previous statistics file written")
-        
+    
+    def getShiftsFile(self):
+        self.writeLog("INFO: downloading latest SHIFTS file")
+        cmd="curl -s ftp://ftp.ebi.ac.uk/pub/databases/msd/sifts/text/pdb_chain_uniprot.lst > /data/dbs/uniprot/%s/pdb_chain_uniprot.lst"%(self.uniprot)
+        chk=getstatusoutput(cmd)
+        if chk[0]:
+            self.writeLog("ERROR: Can't download the latest SHIFTS file")
+            sys.exit(1)
+    def sendMessage(self,mailmessage):
+        #print mailmessage
+        #mailcmd="mail -s \"EPPIC topup\" \"eppic@systemsx.ch\" <<< \"%s\""%(mailmessage)
+        mailcmd="mail -s \"EPPIC topup\" \"kumaran.baskaran@\" <<< \"%s\""%(mailmessage)
+        chk=getstatusoutput(mailcmd)
+        if chk[0]:
+            self.writeLog("WARNING: Can't send the message through mail")
+        else:
+            self.writeLog("INFO: message sent through mail")
 
     def runAll(self):
         self.parsePDBrsyncfile()
+        self.getShiftsFile()
         self.prepareInputs()
         self.writeQsubscript()
         self.getPreviousStat()
