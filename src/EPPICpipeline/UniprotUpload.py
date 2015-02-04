@@ -362,22 +362,22 @@ class UniprotUpload:
             self.writeLog("INFO: File transfer finished")            
     
     def runAll(self):
-        self.downloadUniprot()
-        self.downloadTaxonomy()
-        self.downloadShifts()
-        self.unzipTaxonomy()
-        self.parseUniprotXml()
-        self.createUniprotTables()
-        self.uploadUniprotTable()
-        self.uploadUniprotClustersTable()
-        self.uploadTaxonomyTable()
-        self.createUniprotIndex()
-        self.downloadUniprotReldata()
-        self.downloadUniprotFasta()
-        self.createUniprotFiles()
-        self.createUniqueFasta()
-        self.prepareFileTransfer()
-        #self.transferFiles()
+        self.downloadUniprot() #download uniref100.xml.gz
+        self.downloadTaxonomy() # download taxonomy zip file
+        self.downloadShifts() # download shifts maping file
+        self.unzipTaxonomy() # unziping taxonomy file
+        self.parseUniprotXml() # parse uniref100.xml.gz using eppic.jar to create .tab files for uploading into database
+        self.createUniprotTables() #create uniprot mysql table
+        self.uploadUniprotTable() # upload uniprot data into mysql table
+        self.uploadUniprotClustersTable() # upload uniprot_clusters data into mysql table
+        self.uploadTaxonomyTable() #uplolad taxonomy table
+        self.createUniprotIndex() # index the uniprot mysql table
+        self.downloadUniprotReldata() # donload reldate.txt file 
+        self.downloadUniprotFasta()# download uniprot fast file
+        self.createUniprotFiles()# parse and split the uniprot fast file
+        self.createUniqueFasta()# prepare unique sequence list for blast
+        self.prepareFileTransfer()# prepare files for merlin
+        #self.transferFiles() # If you have passwd free acess to merlin then you can automaticallly transfer files
         
     def checkUniprot(self):
         self.version=urlopen(self.urlUniprotReldate).read().split("\n")[0].split(" ")[3]
