@@ -11,26 +11,32 @@ from string import atof
 import MySQLdb
 import sys
 from time import localtime,strftime
-
+from urllib2 import urlopen
 class UniprotUpload:
     
-    def __init__(self,uniprot,outpath):
-        self.mysqluser='root'
-        self.mysqlhost='mpc1153.psi.ch'
-        self.mysqlpasswd=''
-        self.uniprot=uniprot
-        self.outpath=outpath
-        self.uniprotDatabase="uniprot_%s"%(self.uniprot)
-        self.outdir="%s/eppic_%s"%(self.outpath,self.uniprot)
-        self.eppicjar="%s/eppic.jar"%(self.outpath)
-        self.downloadFolder="%s/download"%(self.outdir)
-        self.fastaFolder="%s/unique_fasta"%(self.outdir)
-        self.uniprotDir="%s/%s"%(self.outdir,self.uniprotDatabase)
-        self.logfile=open("%s/uniprot_upload_%s.log"%(self.outpath,strftime("%d%m%Y_%H%M%S",localtime())),'a')
-        self.writeLog("INFO: EPPIC calculation started")
-        self.checkMeomory()
-        self.connectDatabase()
-        self.clusterFolder="%s/eppic_%s"%(self.outdir,self.uniprot)
+    def __init__(self,outpath):
+        self.checkUniprot()
+        self.uniprot=self.version
+        cc=raw_input("The latest available UniProt version is %s. Do you want to continue? [y/n] :"%(self.uniprot))
+        if cc in ["y","Y","yes"]:
+            self.mysqluser='root'
+            self.mysqlhost='mpc1153.psi.ch'
+            self.mysqlpasswd=''
+            self.outpath=outpath
+            self.uniprotDatabase="uniprot_%s"%(self.uniprot)
+            self.outdir="%s/eppic_%s"%(self.outpath,self.uniprot)
+            self.eppicjar="%s/eppic.jar"%(self.outpath)
+            self.downloadFolder="%s/download"%(self.outdir)
+            self.fastaFolder="%s/unique_fasta"%(self.outdir)
+            self.uniprotDir="%s/%s"%(self.outdir,self.uniprotDatabase)
+            self.logfile=open("%s/uniprot_upload_%s.log"%(self.outpath,strftime("%d%m%Y_%H%M%S",localtime())),'a')
+            self.writeLog("INFO: EPPIC calculation started")
+            self.checkMeomory()
+            self.connectDatabase()
+            self.clusterFolder="%s/eppic_%s"%(self.outdir,self.uniprot)
+        else:
+            print "UniProt database creation cancelled!"
+            sys.exit(0)
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y %H:%M:%S",localtime())
         self.logfile.write("%s\t%s\n"%(t,msg))
@@ -373,12 +379,15 @@ class UniprotUpload:
         self.prepareFileTransfer()
         #self.transferFiles()
         
+    def checkUniprot(self):
+        self.version=urlopen(self.urlUniprotReldate).read().split("\n")[0].split(" ")[3]
+        
+        
    
         
 if __name__=="__main__":
-    uniprotversion=sys.argv[1]
-    workdir=sys.argv[2]
-    p=UniprotUpload(uniprotversion,workdir)
+    workdir=sys.argv[1]
+    p=UniprotUpload(workdir)
     p.runAll()
     #p.runAll()
 

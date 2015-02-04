@@ -33,7 +33,6 @@ class UploadTopup:
         self.checkDate()
         self.logfile=open("%s/upload_%s.log"%(self.workDir,self.today),'a')
         self.getUniprotVersion()
-        self.version="2015_01"
         self.uniprot="uniprot_%s"%(self.version)
         self.eppicdb="eppic_%s"%(self.version)
         self.mysqldb=self.eppicdb
@@ -379,8 +378,7 @@ class UploadTopup:
         #mailcmd2="mail -s \"EPPIC topup finished\" -a \"%s\" \"eppic@systemsx.ch\" <<< \"%s\""%(self.statFile,mailmessage2)
         mailcmd2="mail -s \"EPPIC topup finished\" -a \"%s\" \"kumaran.baskaran@psi.ch\" <<< \"%s\""%(self.statFile,mailmessage2)
         cpcmd="cp %s /data/webapps/ewui/statistics.html"%(self.statFile)
-        #chkcp=getstatusoutput(cpcmd)
-        chkcp=[0,0]
+        chkcp=getstatusoutput(cpcmd)
         if chkcp[0]:
             self.writeLog("ERROR: Can't copy %s to /data/webapps/ewui/"%(self.statFile))
             sys.exit(1)
