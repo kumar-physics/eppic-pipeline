@@ -168,9 +168,20 @@ class BlastCache:
                 self.BlastQsub(qs[i], i+1, n)
             self.writeLog("INFO: qsub scripts for BLAST are ready to submit")
             self.writeLog("INFO: you may submit the qsubjobs now")
+    def checkGZfile(self):
+        chkgz=getstatusoutput("ls %s/%s/*.gz"%(self.workDir,self.uniprot))
+        if chkgz[0]:
+            self.writeLog("INFO: No zip(gz) file found in %s/%s"%(self.workDir,self.uniprot))
+        else:
+            rmgz=getstatusoutput("rm %s/%s/*.gz"%(self.workDir,self.uniprot))
+            if rmgz[0]:
+                self.writeLog("WARNING: Can't remove gz file in %s/%s"%(self.workDir,self.uniprot))
+            else:
+                self.writeLog("INFO: gz file removed from %s/%s"%(self.writeLog,self.uniprot))
     def runAll(self):
         self.checkSpace()
         self.makeLogFolders()
+        self.checkGZfile()
         #self.copyUniprotToNodes()
         self.copyUniprotThead()
         self.checkThreadstatus()
