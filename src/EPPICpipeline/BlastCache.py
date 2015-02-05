@@ -4,25 +4,25 @@ Created on Jan 21, 2015
 @author: baskaran_k
 '''
 from commands import getoutput,getstatusoutput
-from time import localtime,strftime
+from time import localtime,strftime,sleep
 import sys
-from string import atof
+from string import atof,atoi
 from threading import Thread
 
 class BlastCache:
     
     def __init__(self,wd):
+        self.uniprot='uniprot_2015_xx'
         self.nodes=["merlinc%02d"%(i) for i in range(1,31)]
         self.userName=getoutput('whoami')
         self.workDir=wd
         self.logFolder="%s/logs"%(self.workDir)
         self.logfile=open("%s/blast_cache_%s.log"%(self.workDir,strftime("%d%m%Y",localtime())),'a')
-        self.uniprot='uniprot_2015_01'
         self.fastaFolder="%s/unique_fasta"%(self.workDir)
         self.blastp='/gpfs/home/baskaran_k/software/packages/ncbi-blast-2.2.27+/bin/blastp'
         self.blastcache="%s/blast_cache_%s"%(self.workDir,self.uniprot)
         self.blastlog="%s/blast"%(self.logFolder)
-        self.threads=10
+        self.threads=15
         
     def makeLogFolders(self):
         self.writeLog("INFO: Creating log folders")
@@ -60,7 +60,7 @@ class BlastCache:
     def writeLog(self,msg):
         t=strftime("%d-%m-%Y_%H:%M:%S",localtime())
         self.logfile.write("%s\t%s\n"%(t,msg))
-        print "%s\t%s\n"%(t,msg)
+        #print "%s\t%s\n"%(t,msg)
         
         
     def checkSpace(self):
@@ -97,15 +97,33 @@ class BlastCache:
                 self.writeLog("INFO: uniprot files copied to %s"%(node))
     
     def copyUniprotThead(self):
-        th=[]
-        i=1
-        for node in self.nodes:
-            tname="Thread %d"%(i)
-            th.append(myThread(i,tname,node,self.userName,self.workDir,self.uniprot))
-            th[-1].start()
-            i+=1
+        self.writeLog("INFO: uniprot file copying starting with %s threads"%(self.threads))
+        chunksize=int(len(self.nodes)/self.threads)
+        crange=range(0,len(self.nodes),chunksize)
+        if crange[-1]!=len(self.nodes):crange.append(len(self.nodes))
+        nodelists=[]
+        print crange
+        for i in range(1,len(crange)):
+            nodelists.append(self.nodes[crange[i-1]:crange[i]])
+        self.th=[]
+        for nodelist in nodelists:
+            threadId=nodelists.index(nodelist)
+            threadName="Thread%d"%(threadId)
+            self.th.append(myThread(threadId,threadName,nodelist,self.userName,self.workDir,self.uniprot,self.writeLog))
+            self.th[-1].start()
 
-        
+    def checkThreadstatus(self):
+        thredStatus=1
+        while(thredStatus):
+            sleep(300)
+            x=[t.is_alive() for t in self.th]
+            running=x.count(True)
+            if running==0:
+                thredStatus=0
+                self.writeLog("INFO: all threads finished copying")
+            else:
+                self.writeLog("INFO: %d threads are still copying"%(running))
+             
                 
     def checkUniprotinNodes(self):
         self.writeLog("INFO: Checking uniprot files in nodes")
@@ -155,6 +173,7 @@ class BlastCache:
         self.makeLogFolders()
         #self.copyUniprotToNodes()
         self.copyUniprotThead()
+        self.checkThreadstatus()
         self.checkUniprotinNodes()
         self.writeBlastQsub()
                     
@@ -190,36 +209,36 @@ class BlastCache:
         fsq.close()
 
 class myThread(Thread):
-    def __init__(self,threadId,threadName,node,userName,workDir,uniprot):
+    def __init__(self,threadId,threadName,nodes,userName,workDir,uniprot,writelog):
         Thread.__init__(self)
         self.threadId=threadId
         self.threadName=threadName
-        self.node=node
+        self.nodes=nodes
         self.userName=userName
         self.workDir=workDir
         self.uniprot=uniprot
-        
-    def copyUniprotThead(self,node,userName,workDir,uniprot):
-        checkfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,userName))
-        if checkfolder[0]== 512:
-            print "INFO: /scratch/%s not found in %s;creating /scratch/%s"%(userName,node,userName) 
-        elif checkfolder[0]!=0:
-            print "ERROR: Can't check /scratch folder in %s"%(node)
-            sys.exit(1)
-        else:
-            print "INFO: /scratch/%s exists in %s"%(userName,node)
-        print "INFO: Coping uniprot files to %s"%(node)
-        cpfolder=getstatusoutput("rsync -az %s/%s %s:/scratch/%s/"%(workDir,uniprot,node,userName))
-        if cpfolder[0]:
-            print "ERROR: Coping uniprot files to %s failed"%(node)
-            sys.exit(1)
-        else:
-            print "INFO: uniprot files copied to %s"%(node)
+        self.writeLog=writelog
+    def copyUniprotToNodes(self):
+        self.writeLog("INFO: Coping uniprot files to computing nodes")
+        for node in self.nodes:
+            checkfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,self.userName))
+            if checkfolder[0]== 512:
+                self.writeLog("INFO: /scratch/%s not found in %s;creating /scratch/%s"%(self.userName,node,self.userName))
+            elif checkfolder[0]!=0:
+                self.writeLog("ERROR: Can't check /scratch folder in %s"%(node))
+                sys.exit(1)
+            else:
+                self.writeLog("INFO: /scratch/%s exists in %s"%(self.userName,node))
+            self.writeLog("INFO: Coping uniprot files to %s"%(node))
+            cpfolder=getstatusoutput("rsync -az %s/%s %s:/scratch/%s/"%(self.workDir,self.uniprot,node,self.userName))
+            #cpfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,self.userName))
+            if cpfolder[0]:
+                self.writeLog("ERROR: Coping uniprot files to %s failed"%(node))
+                sys.exit(1)
+            else:
+                self.writeLog("INFO: uniprot files copied to %s\n%s"%(node,cpfolder[1]))
     def run(self):
-        print "Starting "+ self.threadName
-        self.copyUniprotThead(self.node, self.userName, self.workDir, self.uniprot)
-        print "Ending "+self.threadName
-
+        self.copyUniprotToNodes()
                 
         
 if __name__=="__main__":
