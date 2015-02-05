@@ -78,7 +78,7 @@ class BlastCache:
                 self.writeLog("ERROR: Only %.2f GB is available; 400 GB required"%(freeSpace))
                 sys.exit(1)
     def copyUniprotToNodes(self):
-        self.writeLog("INFO: Coping uniprot files to computing nodes")
+        self.writeLog("INFO: Copying uniprot files to computing nodes")
         for node in self.nodes:
             checkfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,self.userName))
             if checkfolder[0]== 512:
@@ -88,10 +88,10 @@ class BlastCache:
                 sys.exit(1)
             else:
                 self.writeLog("INFO: /scratch/%s exists in %s"%(self.userName,node))
-            self.writeLog("INFO: Coping uniprot files to %s"%(node))
+            self.writeLog("INFO: Copying uniprot files to %s"%(node))
             cpfolder=getstatusoutput("rsync -az %s/%s %s:/scratch/%s/"%(self.workDir,self.uniprot,node,self.userName))
             if cpfolder[0]:
-                self.writeLog("ERROR: Coping uniprot files to %s failed"%(node))
+                self.writeLog("ERROR: Copying uniprot files to %s failed"%(node))
                 sys.exit(1)
             else:
                 self.writeLog("INFO: uniprot files copied to %s"%(node))
@@ -219,7 +219,7 @@ class myThread(Thread):
         self.uniprot=uniprot
         self.writeLog=writelog
     def copyUniprotToNodes(self):
-        self.writeLog("INFO: Coping uniprot files to computing nodes")
+        self.writeLog("INFO: Copying uniprot files to computing nodes")
         for node in self.nodes:
             checkfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,self.userName))
             if checkfolder[0]== 512:
@@ -229,11 +229,11 @@ class myThread(Thread):
                 sys.exit(1)
             else:
                 self.writeLog("INFO: /scratch/%s exists in %s"%(self.userName,node))
-            self.writeLog("INFO: Coping uniprot files to %s"%(node))
+            self.writeLog("INFO: Copying uniprot files to %s"%(node))
             cpfolder=getstatusoutput("rsync -az %s/%s %s:/scratch/%s/"%(self.workDir,self.uniprot,node,self.userName))
             #cpfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,self.userName))
             if cpfolder[0]:
-                self.writeLog("ERROR: Coping uniprot files to %s failed"%(node))
+                self.writeLog("ERROR: Copying uniprot files to %s failed"%(node))
                 sys.exit(1)
             else:
                 self.writeLog("INFO: uniprot files copied to %s\n%s"%(node,cpfolder[1]))

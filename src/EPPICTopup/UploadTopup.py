@@ -50,7 +50,12 @@ class UploadTopup:
                 exit(0)
         chfld=getstatusoutput("ls %s"%(self.workDir))
         if chfld[0]:
-            exit(0)
+            sys.exit(0)
+        else:
+            chfkd2=getstatusoutput("ls %s/statistics_%s.html"%(self.workDir,self.today))
+            if chfkd2[0]==0:
+                sys.exit(0)
+            
         
     def checkJobs(self):
         self.runningJobs=findall(r'\s+\d+\s+\S+\s+topup\s+eppicweb\s+\S\s+\S+\s+\S+\s+\S+\s+\d+\s+(\d+)\n',getoutput('source /var/lib/gridengine/default/common/settings.sh;qstat -u eppicweb -q topup.q'))
@@ -114,6 +119,7 @@ class UploadTopup:
             sys.exit(1)
 
     def removeObsolete(self):
+        self.deletedEntries=atoi(getoutput("cat %s/input/deletedPDB_%s.list | wc -w"%(self.workDir,self.today)))
         if self.deletedEntries()<20:
             delcmd="java -jar %s UploadToDb -D %s -d %s/ -f %s/input/deletedPDB_%s.list -r  > /dev/null"%(self.eppictoosjar,self.eppicdb,self.filesDir,self.workDir,self.today)
             ck=getstatusoutput(delcmd)
