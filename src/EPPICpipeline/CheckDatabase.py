@@ -64,8 +64,11 @@ class CheckDatabase:
         
         
 if __name__=="__main__":
-    db=sys.argv[1]
-    path=sys.argv[2]
-    p=CheckDatabase(db,path)
+    if len(sys.argv)==3:
+        db=sys.argv[1]
+        path=sys.argv[2]
+        p=CheckDatabase(db,path)
+    else:
+        print "Usage: python %s <eppicdb name to test> <path to output dir>"%(sys.argv[0])
     
     

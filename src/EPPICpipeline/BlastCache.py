@@ -7,6 +7,8 @@ from commands import getoutput,getstatusoutput
 from time import localtime,strftime
 import sys
 from string import atof
+from threading import Thread
+
 class BlastCache:
     
     def __init__(self,wd):
@@ -20,6 +22,7 @@ class BlastCache:
         self.blastp='/gpfs/home/baskaran_k/software/packages/ncbi-blast-2.2.27+/bin/blastp'
         self.blastcache="%s/blast_cache_%s"%(self.workDir,self.uniprot)
         self.blastlog="%s/blast"%(self.logFolder)
+        self.threads=10
         
     def makeLogFolders(self):
         self.writeLog("INFO: Creating log folders")
@@ -92,6 +95,17 @@ class BlastCache:
                 sys.exit(1)
             else:
                 self.writeLog("INFO: uniprot files copied to %s"%(node))
+    
+    def copyUniprotThead(self):
+        th=[]
+        i=1
+        for node in self.nodes:
+            tname="Thread %d"%(i)
+            th.append(myThread(i,tname,node,self.userName,self.workDir,self.uniprot))
+            th[-1].start()
+            i+=1
+
+        
                 
     def checkUniprotinNodes(self):
         self.writeLog("INFO: Checking uniprot files in nodes")
@@ -139,7 +153,8 @@ class BlastCache:
     def runAll(self):
         self.checkSpace()
         self.makeLogFolders()
-        self.copyUniprotToNodes()
+        #self.copyUniprotToNodes()
+        self.copyUniprotThead()
         self.checkUniprotinNodes()
         self.writeBlastQsub()
                     
@@ -174,11 +189,43 @@ class BlastCache:
         fsq.write("time %s -matrix $matrix -db /scratch/%s/%s/uniref100.fasta -query %s/$query.fa -num_threads 1 -outfmt 5 -seg no | gzip > %s/$query.blast.xml.gz\n"%(self.blastp,self.userName,self.uniprot,self.fastaFolder,self.blastcache))
         fsq.close()
 
-            
+class myThread(Thread):
+    def __init__(self,threadId,threadName,node,userName,workDir,uniprot):
+        Thread.__init__(self)
+        self.threadId=threadId
+        self.threadName=threadName
+        self.node=node
+        self.userName=userName
+        self.workDir=workDir
+        self.uniprot=uniprot
+        
+    def copyUniprotThead(self,node,userName,workDir,uniprot):
+        checkfolder=getstatusoutput("ssh %s ls /scratch/%s"%(node,userName))
+        if checkfolder[0]== 512:
+            print "INFO: /scratch/%s not found in %s;creating /scratch/%s"%(userName,node,userName) 
+        elif checkfolder[0]!=0:
+            print "ERROR: Can't check /scratch folder in %s"%(node)
+            sys.exit(1)
+        else:
+            print "INFO: /scratch/%s exists in %s"%(userName,node)
+        print "INFO: Coping uniprot files to %s"%(node)
+        cpfolder=getstatusoutput("rsync -az %s/%s %s:/scratch/%s/"%(workDir,uniprot,node,userName))
+        if cpfolder[0]:
+            print "ERROR: Coping uniprot files to %s failed"%(node)
+            sys.exit(1)
+        else:
+            print "INFO: uniprot files copied to %s"%(node)
+    def run(self):
+        print "Starting "+ self.threadName
+        self.copyUniprotThead(self.node, self.userName, self.workDir, self.uniprot)
+        print "Ending "+self.threadName
 
                 
         
 if __name__=="__main__":
-    workdir=sys.argv[1]
-    p=BlastCache(workdir)
-    p.runAll()
+    if len(sys.argv)==2:
+        workdir=sys.argv[1]
+        p=BlastCache(workdir)
+        p.runAll()
+    else:
+        print "Usage: python %s <path to working dir>"%(sys.argv[0])
