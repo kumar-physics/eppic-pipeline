@@ -329,7 +329,7 @@ class UniprotUpload:
                 self.writeLog("ERROR: Creating unique sequences failed",15)
                 sys.exit(1)
             else:
-                splitqueries=call(["split","-l","27000","%s/queries.list"%(self.fastaFolder),"queries_"])
+                splitqueries=call(["split","-l","30000","%s/queries.list"%(self.fastaFolder),"queries_"])
                 mvfiels=getstatusoutput("mv queries_* %s/"%(self.fastaFolder))
                 if mvfiels[0] or splitqueries:
                     self.writeLog("ERROR: Can't split queries",15)

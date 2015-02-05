@@ -27,6 +27,7 @@ class EPPICrun:
         self.output="%s/output"%(self.workDir)
         self.qsub="%s/qsubscripts"%(self.workDir)
         self.blastcache="%s/blast_cache_%s"%(self.workDir,self.uniprot)
+        self.blastdir="/gpfs/home/baskaran_k/data/blast_cache"
         
     def getUniprotVersion(self):
         universion=getstatusoutput("cat %s | grep LOCAL_UNIPROT_DB_NAME"%(self.EPPICCONF))
@@ -38,7 +39,7 @@ class EPPICrun:
             self.writeLog("INFO: UniProt version : %s"%(self.version))
     
     def moveBlastFiles(self):
-        self.writeLog("INFO: moving %s to %s"%(self.blastcache,self.blastdir))
+        self.writeLog("INFO: moving %s to %s/"%(self.blastcache,self.blastdir))
         chk=getstatusoutput("mv %s %s"%(self.blastcache,self.blastdir))
         if chk[0]:
             self.writeLog("ERROR: Can't move %s to %s"%(self.blastcache,self.blastdir))

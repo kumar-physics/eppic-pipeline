@@ -166,8 +166,12 @@ class BlastCache:
             for i in range(len(qs)):
                 n=getstatusoutput("cat %s | wc -l"%(qs[i]))[1]
                 self.BlastQsub(qs[i], i+1, n)
-            self.writeLog("INFO: qsub scripts for BLAST are ready to submit")
-            self.writeLog("INFO: you may submit the qsubjobs now")
+                qst=getstatusoutput("qsub %s/blastJob_%d.sh"%(self.workDir,i+1))
+                if qst[0]:
+                    self.writeLog("WARNING: can't submit qsub script")
+                else:
+                    self.writeLog("INFO: qsub scripts submitted")
+            
     def checkGZfile(self):
         chkgz=getstatusoutput("ls %s/%s/*.gz"%(self.workDir,self.uniprot))
         if chkgz[0]:
@@ -178,6 +182,9 @@ class BlastCache:
                 self.writeLog("WARNING: Can't remove gz file in %s/%s"%(self.workDir,self.uniprot))
             else:
                 self.writeLog("INFO: gz file removed from %s/%s"%(self.writeLog,self.uniprot))
+    
+    
+    
     def runAll(self):
         self.checkSpace()
         self.makeLogFolders()
