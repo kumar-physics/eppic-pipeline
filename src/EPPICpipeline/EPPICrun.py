@@ -4,7 +4,7 @@ Created on Jan 26, 2015
 @author: baskaran_k
 '''
 
-from commands import getstatusoutput
+from commands import getstatusoutput,getoutput
 from time import localtime,strftime
 import sys
 from math import ceil
@@ -13,21 +13,20 @@ from string import atoi
 class EPPICrun:
     
     def __init__(self,wd):
-        self.EPPIC="/gpfs/home/baskaran_k/software/bin/eppic"
-        self.EPPICCONF="/gpfs/home/baskaran_k/.eppic.conf"
-        self.mmCIFDir="/gpfs/home/baskaran_k/data/pdb/data/structures/all/mmCIF"
-        #self.mmCIFDir="/home/baskaran_k/cifrepo"
+        self.userName=getoutput('whoami')
+        self.EPPIC="/gpfs/home/%s/software/bin/eppic"%(self.userName)
+        self.EPPICCONF="/gpfs/home/%s/.eppic.conf"%(self.userName)
+        self.mmCIFDir="/gpfs/home/%s/data/pdb/data/structures/all/mmCIF"%(self.userName)
         self.workDir=wd
         self.chunksize=30000
         self.logfile=open("%s/eppic_run_%s.log"%(self.workDir,strftime("%d%m%Y",localtime())),'a')
         self.getUniprotVersion()
-        self.uniprot="uniprot_%"%(self.version)
-        self.getLocalBlastdir()
+        self.uniprot="uniprot_%s"%(self.version)
         self.input="%s/input"%(self.workDir)
         self.output="%s/output"%(self.workDir)
         self.qsub="%s/qsubscripts"%(self.workDir)
         self.blastcache="%s/blast_cache_%s"%(self.workDir,self.uniprot)
-        self.blastdir="/gpfs/home/baskaran_k/data/blast_cache"
+        self.blastdir="/gpfs/home/%s/data/blast_cache"%(self.userName)
         
     def getUniprotVersion(self):
         universion=getstatusoutput("cat %s | grep LOCAL_UNIPROT_DB_NAME"%(self.EPPICCONF))
@@ -40,7 +39,7 @@ class EPPICrun:
     
     def moveBlastFiles(self):
         self.writeLog("INFO: moving %s to %s/"%(self.blastcache,self.blastdir))
-        chk=getstatusoutput("mv %s %s"%(self.blastcache,self.blastdir))
+        chk=getstatusoutput("mv %s %s/%s"%(self.blastcache,self.blastdir,self.uniprot))
         if chk[0]:
             self.writeLog("ERROR: Can't move %s to %s"%(self.blastcache,self.blastdir))
             sys.exit(1)
@@ -61,7 +60,7 @@ class EPPICrun:
     
     def rsyncPDB(self):
         self.writeLog("INFO: Updating local PDB repo")
-        rspdb=getstatusoutput("/gpfs/home/baskaran_k/bin/rsyncpdb")
+        rspdb=getstatusoutput("/gpfs/home/%s/bin/rsyncpdb"%(self.userName))
         if rspdb[0]:
             self.writeLog("ERROR: Problem in updating local PDB repo, try rsync manually")
             sys.exit(1)
@@ -182,9 +181,6 @@ class EPPICrun:
         f.close()
         self.writeLog("INFO: %s written"%(qsubname))
 
-    def initialRun(self):
-        #self.rsyncPDB()
-        self.prepareInput()
             
     def testChunk(self,chkno,n):
         self.writeLog("INFO: testing chunk%d for unfinished jobs"%(chkno))
