@@ -1,3 +1,4 @@
+#!/usr/bin/python
 '''
 Created on Jan 28, 2015
 
@@ -14,8 +15,8 @@ from string import atof
 class TopupEPPIC:
     
     def __init__(self):
-        self.mysqluser=''
-        self.mysqlhost=''
+        self.mysqluser='eppicweb'
+        self.mysqlhost='localhost'
         self.mysqlpasswd=''
         self.eppicpath='/home/eppicweb/software/bin/eppic'
         self.eppicconf='/home/eppicweb/.eppic.conf'
@@ -237,8 +238,8 @@ class TopupEPPIC:
             sys.exit(1)
     def sendMessage(self,mailmessage):
         #print mailmessage
-        #mailcmd="mail -s \"EPPIC topup\" \"eppic@systemsx.ch\" <<< \"%s\""%(mailmessage)
-        mailcmd="mail -s \"EPPIC topup\" \"kumaran.baskaran@\" <<< \"%s\""%(mailmessage)
+        mailcmd="mail -s \"EPPIC topup\" \"eppic@systemsx.ch\" <<< \"%s\""%(mailmessage)
+        #mailcmd="mail -s \"EPPIC topup\" \"kumaran.baskaran@psi.ch\" <<< \"%s\""%(mailmessage)
         chk=getstatusoutput(mailcmd)
         if chk[0]:
             self.writeLog("WARNING: Can't send the message through mail")

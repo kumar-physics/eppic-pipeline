@@ -1,3 +1,4 @@
+#!/usr/bin/python
 '''
 Created on Jan 28, 2015
 
@@ -18,8 +19,8 @@ class UploadTopup:
     
     def __init__(self,offsetday):
         
-        self.mysqluser=''
-        self.mysqlhost=''
+        self.mysqluser='eppicweb'
+        self.mysqlhost='localhost'
         self.mysqlpasswd=''
         self.eppictoosjar='/home/eppicweb/software/jars/eppic-dbtools.jar'
         self.eppicpath='/home/eppicweb/software/bin/eppic'
@@ -58,7 +59,14 @@ class UploadTopup:
             
         
     def checkJobs(self):
-        self.runningJobs=findall(r'\s+\d+\s+\S+\s+topup\s+eppicweb\s+\S\s+\S+\s+\S+\s+\S+\s+\d+\s+(\d+)\n',getoutput('source /var/lib/gridengine/default/common/settings.sh;qstat -u eppicweb -q topup.q'))
+        qstatdump=getoutput('source /var/lib/gridengine/default/common/settings.sh;qstat -u eppicweb -q topup.q')
+        qstatparse=findall(r'\s+\d+\s+\S+\s+topup\s+eppicweb\s+\S\s+\S+\s+\S+\s+\S+\s+\d+\s+(\d+)\n|\s+\d+\s+\S+\s+topup\s+eppicweb\s+\S\s+\S+\s+\S+\s+\S+\s+\d+\s+(\d+)',qstatdump)
+        if len(qstatparse)>1:
+            self.runningJobs=[i(0) for i in qstatparse]
+        elif len(qstatparse)==1:
+            self.runningJobs=[i[1] for i in qstatparse]
+        else:
+            self.runningJobs=[]
         self.checkstatfile=getstatusoutput("ls %s"%(self.statFile))
         if len(self.runningJobs)==0 and self.checkstatfile[0]==512: #512 means file not found
             self.writeLog("INFO: No more jobs in qsub and %s file not found"%(self.statFile))
@@ -66,7 +74,10 @@ class UploadTopup:
             self.runAll()
             self.sendReport()
         elif len(self.runningJobs)!=0:
-            self.writeLog("INFO: %d jobs running"%(len(self.runningJobs)))
+            if len(self.runningJobs)==1:
+                self.writeLog("INFO: %d job running"%(len(self.runningJobs)))
+            else:
+                self.writeLog("INFO: %d jobs running"%(len(self.runningJobs)))
             self.sendMessage()
         elif self.checkstatfile[0]==0:
             self.writeLog("INFO: statistics file already exists")
@@ -120,7 +131,7 @@ class UploadTopup:
 
     def removeObsolete(self):
         self.deletedEntries=atoi(getoutput("cat %s/input/deletedPDB_%s.list | wc -w"%(self.workDir,self.today)))
-        if self.deletedEntries()<20:
+        if self.deletedEntries<20:
             delcmd="java -jar %s UploadToDb -D %s -d %s/ -f %s/input/deletedPDB_%s.list -r  > /dev/null"%(self.eppictoosjar,self.eppicdb,self.filesDir,self.workDir,self.today)
             ck=getstatusoutput(delcmd)
             if ck[0]:
@@ -217,7 +228,7 @@ class UploadTopup:
         fo.write("\t<img class=\"eppic-iframe-top-img\" src=\"resources/images/eppic-logo.png\">\n")
         fo.write("\t<div class=\"eppic-statistics\">\n")
         fo.write("\t<h1>EPPIC database statistics as of %s</h1>\n"%(self.today))
-        fo.write("\t<h3>Based on UniProt_%s and PDB release of %s</h3>\n"%(self.uniprot,self.pdbrdate.strftime("%d-%m-%Y")))
+        fo.write("\t<h3>Based on UniProt_%s and PDB release of %s</h3>\n"%(self.version,self.pdbrdate.strftime("%d-%m-%Y")))
         fo.write("\t<h4>Values in []: absolute and percentual difference between before and after top-up</h4>\n")
         fo.write("\t<h2>Number of entries</h2>\n")
         fo.write("\t<table>\n")
@@ -367,11 +378,14 @@ class UploadTopup:
         fo.write("</body>\n</html>")
         fo.close()
     def sendMessage(self):
-        mailmessage="Job Ids %s are running "%(" ".join(self.runningJobs))
+        if len(self.runningJobs)==1:
+            mailmessage="Job Id %s is still running "%(" ".join(self.runningJobs))
+        else:
+            mailmessage="Job Ids %s are running "%(" ".join(self.runningJobs))
         msg2=mailmessage+"\nMemory info (GB)\n"+getoutput('free -g')
         #print mailmessage
-        #mailcmd="mail -s \"EPPIC topup running\" \"eppic@systemsx.ch\" <<< \"%s\""%(msg2)
-        mailcmd="mail -s \"EPPIC topup running\" \"kumaran.baskaran@psi.ch\" <<< \"%s\""%(msg2)
+        mailcmd="mail -s \"EPPIC topup running\" \"eppic@systemsx.ch\" <<< \"%s\""%(msg2)
+        #mailcmd="mail -s \"EPPIC topup running\" \"kumaran.baskaran@psi.ch\" <<< \"%s\""%(msg2)
         chkml=getstatusoutput(mailcmd)
         if chkml[0]:
             self.writeLog("ERROR: Can't send status message via mail")
@@ -381,8 +395,8 @@ class UploadTopup:
         mailmessage2="All jobs finished successfully. Please see the attachment"
         #mailmessage2="This is a test"
         #print mailmessage
-        #mailcmd2="mail -s \"EPPIC topup finished\" -a \"%s\" \"eppic@systemsx.ch\" <<< \"%s\""%(self.statFile,mailmessage2)
-        mailcmd2="mail -s \"EPPIC topup finished\" -a \"%s\" \"kumaran.baskaran@psi.ch\" <<< \"%s\""%(self.statFile,mailmessage2)
+        mailcmd2="mail -s \"EPPIC topup finished\" -a \"%s\" \"eppic@systemsx.ch\" <<< \"%s\""%(self.statFile,mailmessage2)
+        #mailcmd2="mail -s \"EPPIC topup finished\" -a \"%s\" \"kumaran.baskaran@psi.ch\" <<< \"%s\""%(self.statFile,mailmessage2)
         cpcmd="cp %s /data/webapps/ewui/statistics.html"%(self.statFile)
         chkcp=getstatusoutput(cpcmd)
         if chkcp[0]:
